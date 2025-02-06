@@ -2,7 +2,7 @@ package com.urlshortener.redirect.config;
 
 import com.urlshortener.redirect.domain.enums.AuthoritiesConstants;
 import com.urlshortener.redirect.jwt.JwtFilter;
-import com.urlshortener.redirect.service.impl.UserDetailsServiceImpl;
+import com.urlshortener.redirect.service.UserDetailsServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -57,8 +57,8 @@ public class SecurityConfig {
                    .authorizeHttpRequests(authz -> authz
                            .requestMatchers("/auth/**").permitAll()
                            .requestMatchers("/admin/**").hasAuthority(AuthoritiesConstants.ADMIN.getRole())
-                           .requestMatchers("/api/redirect/**").permitAll()
                            .requestMatchers("/api/**").authenticated()
+                           .requestMatchers("/{shortUrl}").permitAll()
                            .anyRequest().authenticated()
                    )
                    .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
