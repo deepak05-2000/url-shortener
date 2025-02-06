@@ -1,0 +1,212 @@
+Here's a simplified Java implementation using Spring Boot for the core components. I'll focus on the key classes and relationships:
+
+```java
+// Domain Entities
+@Entity
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String email;
+    private String passwordHash;
+    private LocalDateTime createdAt;
+
+    @OneToMany(mappedBy = "owner")
+    private List<ShortenedUrl> urls;
+}
+
+@Entity
+public class ShortenedUrl {
+    @Id
+    private String shortCode;
+    private String originalUrl;
+    private LocalDateTime createdAt;
+    private LocalDateTime expiresAt;
+    private int clickCount;
+    private boolean isCustom;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    private User owner;
+
+    @OneToMany(mappedBy = "shortenedUrl", cascade = CascadeType.ALL)
+    private List<ClickAnalytics> analytics = new ArrayList<>();
+}
+
+@Entity
+public class ClickAnalytics {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private LocalDateTime timestamp;
+    private String ipAddress;
+    private String country;
+    private String deviceType;
+    private String browser;
+    private String referrer;
+
+    @ManyToOne
+    @JoinColumn(name = "short_code")
+    private ShortenedUrl shortenedUrl;
+}
+
+// Repositories
+public interface ShortenedUrlRepository extends JpaRepository<ShortenedUrl, String> {
+    boolean existsByShortCode(String shortCode);
+}
+
+public interface ClickAnalyticsRepository extends JpaRepository<ClickAnalytics, Long> {
+    List<ClickAnalytics> findByShortenedUrlAndTimestampBetween(
+        ShortenedUrl shortenedUrl, LocalDateTime start, LocalDateTime end);
+}
+
+// Services
+@Service
+public class UrlShorteningService {
+    private final ShortenedUrlRepository urlRepository;
+    private final ShortCodeGenerator codeGenerator;
+    private final AnalyticsService analyticsService;
+
+    public ShortenedUrl shortenUrl(String originalUrl, String customCode) {
+        String code = StringUtils.isNotBlank(customCode) ?
+            validateCustomCode(customCode) : codeGenerator.generateRandomCode();
+
+        ShortenedUrl url = new ShortenedUrl();
+        url.setShortCode(code);
+        url.setOriginalUrl(originalUrl);
+        url.setCreatedAt(LocalDateTime.now());
+        return urlRepository.save(url);
+    }
+
+    public String redirect(String shortCode, HttpServletRequest request) {
+        ShortenedUrl url = urlRepository.findById(shortCode)
+            .orElseThrow(() -> new ResourceNotFoundException("URL not found"));
+
+        ClickAnalytics analytics = new ClickAnalytics();
+        analytics.setTimestamp(LocalDateTime.now());
+        analytics.setIpAddress(request.getRemoteAddr());
+        analyticsService.recordAnalytics(url, analytics);
+
+        url.setClickCount(url.getClickCount() + 1);
+        urlRepository.save(url);
+
+        return url.getOriginalUrl();
+    }
+}
+
+@Service
+public class AnalyticsService {
+    private final ClickAnalyticsRepository analyticsRepository;
+
+    public List<ClickAnalytics> getClickAnalytics(String shortCode, LocalDateTime start, LocalDateTime end) {
+        ShortenedUrl url = urlRepository.findById(shortCode)
+            .orElseThrow(() -> new ResourceNotFoundException("URL not found"));
+
+        return analyticsRepository.findByShortenedUrlAndTimestampBetween(url, start, end);
+    }
+
+    public Map<String, Long> getGeoDistribution(String shortCode) {
+        return analyticsRepository.getGeoDistribution(shortCode);
+    }
+}
+
+// Utility Classes
+@Component
+public class ShortCodeGenerator {
+    private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final int CODE_LENGTH = 7;
+
+    public String generateRandomCode() {
+        SecureRandom random = new SecureRandom();
+        return IntStream.range(0, CODE_LENGTH)
+            .map(i -> random.nextInt(CHARACTERS.length()))
+            .mapToObj(CHARACTERS::charAt)
+            .collect(StringBuilder::new, StringBuilder::append, StringBuilder::append)
+            .toString();
+    }
+}
+
+// Controllers
+@RestController
+@RequestMapping("/api/urls")
+public class UrlController {
+    private final UrlShorteningService urlService;
+
+    @PostMapping
+    public ResponseEntity<ShortenedUrl> createShortUrl(
+        @RequestBody UrlRequest request,
+        @AuthenticationPrincipal User user
+    ) {
+        ShortenedUrl url = urlService.shortenUrl(request.getOriginalUrl(), request.getCustomCode());
+        return ResponseEntity.created(URI.create("/api/urls/" + url.getShortCode())).body(url);
+    }
+
+    @GetMapping("/{shortCode}")
+    public ResponseEntity<Void> redirect(@PathVariable String shortCode, HttpServletRequest request) {
+        String originalUrl = urlService.redirect(shortCode, request);
+        return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(originalUrl)).build();
+    }
+}
+
+@RestController
+@RequestMapping("/api/analytics")
+public class AnalyticsController {
+    private final AnalyticsService analyticsService;
+
+    @GetMapping("/{shortCode}")
+    public ResponseEntity<AnalyticsResponse> getAnalytics(
+        @PathVariable String shortCode,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end
+    ) {
+        List<ClickAnalytics> clicks = analyticsService.getClickAnalytics(shortCode, start, end);
+        return ResponseEntity.ok(new AnalyticsResponse(clicks));
+    }
+}
+
+// Security Configuration
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf().disable()
+            .authorizeRequests()
+                .antMatchers("/{shortCode}", "/api/auth/**").permitAll()
+                .antMatchers("/api/**").authenticated()
+            .and()
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .and()
+            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
+
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        return new JwtAuthenticationFilter();
+    }
+}
+```
+
+This implementation includes:
+
+1. **Core Domain Entities**: User, ShortenedUrl, and ClickAnalytics with JPA annotations
+2. **Repository Layer**: Spring Data JPA repositories
+3. **Service Layer**: Business logic for URL shortening and analytics
+4. **REST Controllers**: API endpoints for URL management and analytics
+5. **Security Configuration**: JWT-based authentication
+6. **Utility Classes**: Short code generation and analytics processing
+
+To complete the implementation you would need to add:
+
+1. **DTO Classes**: For request/response payloads
+2. **Exception Handling**: Global exception handler with proper error responses
+3. **Validation**: Input validation for URLs and custom codes
+4. **Rate Limiting**: To prevent abuse of the service
+5. **Caching**: For frequently accessed URLs using Redis or similar
+6. **Scheduled Tasks**: For analytics aggregation and URL expiration cleanup
+7. **IP Geolocation**: Integration with a geolocation service
+8. **Device Detection**: Library for detecting device/browser from User-Agent
+
+Would you like me to expand on any specific component or show implementation details for the remaining parts?

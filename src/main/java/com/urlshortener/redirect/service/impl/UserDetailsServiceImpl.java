@@ -1,4 +1,4 @@
-package com.urlshortener.redirect.service;
+package com.urlshortener.redirect.service.impl;
 
 import com.urlshortener.redirect.domain.User;
 import com.urlshortener.redirect.repository.UserRepository;
