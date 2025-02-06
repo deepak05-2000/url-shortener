@@ -19,12 +19,12 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/auth")
-public class AuthController {
+public class AuthResource {
 
     private UserService userService;
     private PasswordEncoder passwordEncoder;
 
-    public AuthController(UserService userService, PasswordEncoder passwordEncoder) {
+    public AuthResource(UserService userService, PasswordEncoder passwordEncoder) {
         this.userService = userService;
         this.passwordEncoder = passwordEncoder;
     }
