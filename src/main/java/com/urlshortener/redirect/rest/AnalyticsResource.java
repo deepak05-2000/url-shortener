@@ -1,6 +1,6 @@
 package com.urlshortener.redirect.rest;
 
-import com.urlshortener.redirect.domain.Analytics;
+import com.urlshortener.redirect.dtos.AnalyticsDTO;
 import com.urlshortener.redirect.service.AnalyticsService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,7 +19,7 @@ public class AnalyticsResource {
     }
 
     @GetMapping("/analytics/{shortCode}")
-    public ResponseEntity<List<Analytics>> getAnalytics(
+    public ResponseEntity<List<AnalyticsDTO>> getAnalytics(
             @PathVariable String shortCode,
             @RequestParam(required = false) LocalDateTime startDate,
             @RequestParam(required = false) LocalDateTime endDate

@@ -24,6 +24,7 @@ public class User extends AbstractAuditingEntity<Long> implements Serializable, 
     private String password;
 
     private String email;
+
     @JsonIgnore
     @ManyToMany
     @JoinTable(name = "user_authority", joinColumns = {@JoinColumn(name = "user_id", referencedColumnName = "id")},
@@ -32,6 +33,9 @@ public class User extends AbstractAuditingEntity<Long> implements Serializable, 
     @OneToMany
     private List<ShortenedUrl> shortenedUrls = new ArrayList<>();
 
+    public String getEmail() {
+        return email;
+    }
 
     public void setEmail(String email) {
         this.email = email;

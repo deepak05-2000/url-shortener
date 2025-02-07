@@ -4,6 +4,7 @@ import com.urlshortener.redirect.domain.enums.AuthoritiesConstants;
 import com.urlshortener.redirect.jwt.JwtFilter;
 import com.urlshortener.redirect.service.impl.UserDetailsServiceImpl;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,6 +18,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
@@ -27,6 +29,8 @@ public class SecurityConfig {
 
 
     private UserDetailsServiceImpl userDetailsService;
+    @Autowired
+    private RateLimitingConfig rateLimitingConfig;
 
     public SecurityConfig(UserDetailsServiceImpl userDetailsService) {
         this.userDetailsService = userDetailsService;
@@ -62,6 +66,7 @@ public class SecurityConfig {
                            .anyRequest().authenticated()
                    )
                    .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                   .addFilterBefore(rateLimitingConfig, AuthenticationFilter.class)
                    .addFilterBefore(jwtFilter(), UsernamePasswordAuthenticationFilter.class)
                    .build();
     }

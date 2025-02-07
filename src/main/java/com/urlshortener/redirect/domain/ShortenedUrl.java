@@ -25,7 +25,7 @@ public class ShortenedUrl {
 
 
     //TODO make it lazy intialize and make DTOs so that serialization works
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User owner;
 

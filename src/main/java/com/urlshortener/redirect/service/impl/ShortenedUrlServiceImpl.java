@@ -3,18 +3,19 @@ package com.urlshortener.redirect.service.impl;
 import com.urlshortener.redirect.domain.Analytics;
 import com.urlshortener.redirect.domain.ShortenedUrl;
 import com.urlshortener.redirect.domain.User;
+import com.urlshortener.redirect.dtos.ShortenedUrlDTO;
 import com.urlshortener.redirect.repository.ShortenedUrlRepository;
 import com.urlshortener.redirect.repository.UserRepository;
 import com.urlshortener.redirect.service.AnalyticsService;
 import com.urlshortener.redirect.service.ShortenedUrlService;
+import com.urlshortener.redirect.service.mapper.ShortenedUrlMapper;
 import com.urlshortener.redirect.util.Base62Converter;
 import com.urlshortener.redirect.util.SecurityUtil;
 import eu.bitwalker.useragentutils.DeviceType;
 import eu.bitwalker.useragentutils.UserAgent;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,35 +30,37 @@ public class ShortenedUrlServiceImpl implements ShortenedUrlService {
     private final AnalyticsService analyticsService;
     private final ShortenedUrlRepository shortenedUrlRepository;
     private final UserRepository userRepository;
+    private final ShortenedUrlMapper shortenedUrlMapper;
 
     public ShortenedUrlServiceImpl(AnalyticsService analyticsService, ShortenedUrlRepository shortenedUrlRepository,
-            UserRepository userRepository
+            UserRepository userRepository, ShortenedUrlMapper shortenedUrlMapper
     ) {
         this.analyticsService = analyticsService;
         this.shortenedUrlRepository = shortenedUrlRepository;
         this.userRepository = userRepository;
+        this.shortenedUrlMapper = shortenedUrlMapper;
     }
 
     @Override
-    public ShortenedUrl shortUrl(String originalUrl) {
+    public ShortenedUrlDTO shortUrl(String originalUrl) {
         Optional<ShortenedUrl> exist = shortenedUrlRepository.findByOriginalUrl(originalUrl);
         if(exist.isPresent()) {
-            return exist.get();
+            return shortenedUrlMapper.toDTO(exist.get());
         }
         ShortenedUrl shortenedUrl = new ShortenedUrl();
         shortenedUrl.setClickCount(0L);
         shortenedUrl.setOriginalUrl(originalUrl);
         shortenedUrl.setShortCode(Base62Converter.generateShortUrl(originalUrl));
-
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         User user = userRepository.findByUsername(SecurityUtil.getCurrentUsername()).get();
         shortenedUrl.setOwner(user);
 
-        return shortenedUrlRepository.save(shortenedUrl);
+        return shortenedUrlMapper.toDTO(shortenedUrlRepository.save(shortenedUrl));
     }
 
     @Override
+    @Cacheable(value = "originalUrl", key = "#shortUrl")
     public String getOriginalUrl(String shortUrl, HttpServletRequest request) {
+        log.debug("Entered in getOriginalUrl");
         ShortenedUrl shortenedUrl = shortenedUrlRepository.findByShortCode(shortUrl).orElseThrow(
                 () -> new RuntimeException("URL does not exist")
         );
