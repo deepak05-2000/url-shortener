@@ -1,6 +1,7 @@
 package com.urlshortener.redirect.domain.enums;
 
 public enum AuthoritiesConstants {
+
     ADMIN("ROLE_ADMIN"),
     USER("ROLE_USER");
 

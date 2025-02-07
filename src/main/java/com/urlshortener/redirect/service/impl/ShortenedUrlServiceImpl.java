@@ -15,9 +15,13 @@ import eu.bitwalker.useragentutils.DeviceType;
 import eu.bitwalker.useragentutils.UserAgent;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -31,6 +35,9 @@ public class ShortenedUrlServiceImpl implements ShortenedUrlService {
     private final ShortenedUrlRepository shortenedUrlRepository;
     private final UserRepository userRepository;
     private final ShortenedUrlMapper shortenedUrlMapper;
+
+    @Value("${url.expirationDays}")
+    private String expirationDays;
 
     public ShortenedUrlServiceImpl(AnalyticsService analyticsService, ShortenedUrlRepository shortenedUrlRepository,
             UserRepository userRepository, ShortenedUrlMapper shortenedUrlMapper
@@ -50,6 +57,7 @@ public class ShortenedUrlServiceImpl implements ShortenedUrlService {
         ShortenedUrl shortenedUrl = new ShortenedUrl();
         shortenedUrl.setClickCount(0L);
         shortenedUrl.setOriginalUrl(originalUrl);
+        shortenedUrl.setExpiresAt(expirationDays != null ? LocalDateTime.now().plusDays(Integer.parseInt(expirationDays)) : null);
         shortenedUrl.setShortCode(Base62Converter.generateShortUrl(originalUrl));
         User user = userRepository.findByUsername(SecurityUtil.getCurrentUsername()).get();
         shortenedUrl.setOwner(user);
@@ -64,6 +72,9 @@ public class ShortenedUrlServiceImpl implements ShortenedUrlService {
         ShortenedUrl shortenedUrl = shortenedUrlRepository.findByShortCode(shortUrl).orElseThrow(
                 () -> new RuntimeException("URL does not exist")
         );
+        if (shortenedUrl.getExpiresAt() != null && shortenedUrl.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.GONE, "Short URL has expired");
+        }
         log.debug("ORIGINAL URL {}", shortenedUrl.getOriginalUrl());
         shortenedUrl.setClickCount(shortenedUrl.getClickCount() + 1);
         shortenedUrl = shortenedUrlRepository.save(shortenedUrl);
@@ -109,5 +120,11 @@ public class ShortenedUrlServiceImpl implements ShortenedUrlService {
             }
         }
         return request.getRemoteAddr();
+    }
+
+    @Scheduled(cron = "0 0 0 * * ?")  // Runs at 00:00 UTC daily
+    public void deleteExpiredShortUrls() {
+        shortenedUrlRepository.deleteByExpiresAtBefore(LocalDateTime.now());
+        System.out.println("Expired short URLs deleted at midnight.");
     }
 }

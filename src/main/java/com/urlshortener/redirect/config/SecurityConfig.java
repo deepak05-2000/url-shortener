@@ -61,6 +61,7 @@ public class SecurityConfig {
                    .authorizeHttpRequests(authz -> authz
                            .requestMatchers("/auth/**").permitAll()
                            .requestMatchers("/admin/**").hasAuthority(AuthoritiesConstants.ADMIN.getRole())
+                           .requestMatchers("/analytics/**").hasAuthority(AuthoritiesConstants.ADMIN.getRole())
                            .requestMatchers("/api/redirect/**").permitAll()
                            .requestMatchers("/api/**").authenticated()
                            .anyRequest().authenticated()

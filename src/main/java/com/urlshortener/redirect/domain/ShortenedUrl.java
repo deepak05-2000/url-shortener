@@ -23,8 +23,6 @@ public class ShortenedUrl {
 
     private Long clickCount;
 
-
-    //TODO make it lazy intialize and make DTOs so that serialization works
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User owner;
